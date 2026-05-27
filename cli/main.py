@@ -1,5 +1,6 @@
 from typing import Optional
 import datetime
+import os
 import typer
 import questionary
 from pathlib import Path
@@ -554,13 +555,34 @@ def get_user_selections():
     )
     selected_research_depth = select_research_depth()
 
-    # Step 6: LLM Provider
-    console.print(
-        create_question_box(
-            "Step 6: LLM Provider", "Select your LLM provider"
+    # Step 6: LLM Provider (skip if TRADINGAGENTS_LLM_PROVIDER is set)
+    default_provider = os.environ.get("TRADINGAGENTS_LLM_PROVIDER", "").strip().lower()
+    if default_provider:
+        # Use default provider from environment
+        PROVIDER_URLS = {
+            "openai": "https://api.openai.com/v1",
+            "google": None,
+            "anthropic": "https://api.anthropic.com/",
+            "xai": "https://api.x.ai/v1",
+            "deepseek": "https://api.deepseek.com",
+            "qwen": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            "glm": "https://open.bigmodel.cn/api/paas/v4/",
+            "minimax": "https://api.minimax.io/v1",
+            "openrouter": "https://openrouter.ai/api/v1",
+            "azure": None,
+            "ollama": os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434/v1",
+            "mimo": "https://token-plan-cn.xiaomimimo.com/v1",
+        }
+        selected_llm_provider = default_provider
+        backend_url = PROVIDER_URLS.get(default_provider)
+        console.print(f"[green]Using default LLM provider:[/green] {selected_llm_provider}")
+    else:
+        console.print(
+            create_question_box(
+                "Step 6: LLM Provider", "Select your LLM provider"
+            )
         )
-    )
-    selected_llm_provider, backend_url = select_llm_provider()
+        selected_llm_provider, backend_url = select_llm_provider()
 
     # Providers with regional endpoints prompt for the region as a secondary
     # step so the main dropdown stays clean (mainland China and international
@@ -582,14 +604,21 @@ def get_user_selections():
     # doesn't fail later at the first API call.
     ensure_api_key(selected_llm_provider)
 
-    # Step 7: Thinking agents
-    console.print(
-        create_question_box(
-            "Step 7: Thinking Agents", "Select your thinking agents for analysis"
+    # Step 7: Thinking agents (skip if TRADINGAGENTS_QUICK_THINK_LLM and TRADINGAGENTS_DEEP_THINK_LLM are set)
+    default_quick = os.environ.get("TRADINGAGENTS_QUICK_THINK_LLM", "").strip()
+    default_deep = os.environ.get("TRADINGAGENTS_DEEP_THINK_LLM", "").strip()
+    if default_quick and default_deep:
+        selected_shallow_thinker = default_quick
+        selected_deep_thinker = default_deep
+        console.print(f"[green]Using default thinking agents:[/green] quick={selected_shallow_thinker}, deep={selected_deep_thinker}")
+    else:
+        console.print(
+            create_question_box(
+                "Step 7: Thinking Agents", "Select your thinking agents for analysis"
+            )
         )
-    )
-    selected_shallow_thinker = select_shallow_thinking_agent(selected_llm_provider)
-    selected_deep_thinker = select_deep_thinking_agent(selected_llm_provider)
+        selected_shallow_thinker = select_shallow_thinking_agent(selected_llm_provider)
+        selected_deep_thinker = select_deep_thinking_agent(selected_llm_provider)
 
     # Step 8: Provider-specific thinking configuration
     thinking_level = None
