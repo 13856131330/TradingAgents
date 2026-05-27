@@ -76,3 +76,25 @@ class TestGetStockData:
         from tradingagents.dataflows.akshare_utils import get_stock_data, AKShareError
         with pytest.raises(AKShareError):
             get_stock_data("999999", "2025-01-01", "2025-01-10")
+
+
+class TestGetIndicators:
+    """Test technical indicator calculation."""
+
+    def test_rsi_indicator(self):
+        """Test RSI calculation."""
+        from tradingagents.dataflows.akshare_utils import get_indicators
+        result = get_indicators("600519", "rsi", "2025-01-10", 5)
+        assert "rsi" in result.lower()
+
+    def test_macd_indicator(self):
+        """Test MACD calculation."""
+        from tradingagents.dataflows.akshare_utils import get_indicators
+        result = get_indicators("600519", "macd", "2025-01-10", 5)
+        assert "macd" in result.lower()
+
+    def test_invalid_indicator(self):
+        """Test error for unsupported indicator."""
+        from tradingagents.dataflows.akshare_utils import get_indicators
+        with pytest.raises(ValueError, match="not supported"):
+            get_indicators("600519", "invalid_indicator", "2025-01-10", 5)
