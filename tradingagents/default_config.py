@@ -98,6 +98,12 @@ DEFAULT_CONFIG = _apply_env_overrides({
         "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance
         "news_data": "yfinance",             # Options: alpha_vantage, yfinance
     },
+    # AKShare configuration for A-share market
+    "akshare_config": {
+        "cache_enabled": True,  # Whether to enable data caching
+        "retry_count": 3,       # Number of retries on failure
+        "timeout": 30,          # API timeout in seconds
+    },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {
         # Example: "get_stock_data": "alpha_vantage",  # Override category default
