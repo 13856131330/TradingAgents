@@ -1,6 +1,8 @@
 """AKShare data provider for A-share market."""
 
+import os
 import re
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Annotated, Optional
 
@@ -12,6 +14,20 @@ from dateutil.relativedelta import relativedelta
 class AKShareError(Exception):
     """AKShare API call error."""
     pass
+
+
+@contextmanager
+def _bypass_proxy():
+    """Temporarily clear proxy env vars so AKShare hits East Money directly."""
+    keys = ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
+            "ALL_PROXY", "all_proxy")
+    saved = {k: os.environ.pop(k, None) for k in keys}
+    try:
+        yield
+    finally:
+        for k, v in saved.items():
+            if v is not None:
+                os.environ[k] = v
 
 
 def is_a_stock_ticker(ticker: str) -> bool:
@@ -74,13 +90,14 @@ def get_stock_data(
 
     try:
         # AKShare uses YYYYMMDD format
-        df = ak.stock_zh_a_hist(
-            symbol=symbol,
-            period="daily",
-            start_date=start_date.replace("-", ""),
-            end_date=end_date.replace("-", ""),
-            adjust="qfq",  # 前复权
-        )
+        with _bypass_proxy():
+            df = ak.stock_zh_a_hist(
+                symbol=symbol,
+                period="daily",
+                start_date=start_date.replace("-", ""),
+                end_date=end_date.replace("-", ""),
+                adjust="qfq",  # 前复权
+            )
 
         if df.empty:
             raise AKShareError(f"No data found for symbol '{raw_symbol}' between {start_date} and {end_date}")
@@ -284,13 +301,14 @@ def get_indicators(
         start_date = (before - relativedelta(days=300)).strftime("%Y-%m-%d")  # Extra days for SMA200
         end_date = curr_date
 
-        df = ak.stock_zh_a_hist(
-            symbol=symbol,
-            period="daily",
-            start_date=start_date.replace("-", ""),
-            end_date=end_date.replace("-", ""),
-            adjust="qfq",
-        )
+        with _bypass_proxy():
+            df = ak.stock_zh_a_hist(
+                symbol=symbol,
+                period="daily",
+                start_date=start_date.replace("-", ""),
+                end_date=end_date.replace("-", ""),
+                adjust="qfq",
+            )
 
         if df.empty:
             raise AKShareError(f"No data found for symbol '{raw_symbol}'")
@@ -387,7 +405,8 @@ def get_fundamentals(
 
     try:
         # Try cninfo profile first (more reliable)
-        df = ak.stock_profile_cninfo(symbol=ticker)
+        with _bypass_proxy():
+            df = ak.stock_profile_cninfo(symbol=ticker)
 
         if df is not None and not df.empty:
             info = df.iloc[0].to_dict()
@@ -426,7 +445,8 @@ def get_fundamentals(
 
     try:
         # Fallback: East Money individual info
-        df = ak.stock_individual_info_em(symbol=ticker)
+        with _bypass_proxy():
+            df = ak.stock_individual_info_em(symbol=ticker)
 
         if df is None or df.empty:
             return f"No fundamentals data found for symbol '{raw_ticker}'"
@@ -480,7 +500,8 @@ def get_balance_sheet(
         ticker = _normalize_for_financial_api(ticker)
 
     try:
-        df = ak.stock_balance_sheet_by_report_em(symbol=ticker)
+        with _bypass_proxy():
+            df = ak.stock_balance_sheet_by_report_em(symbol=ticker)
 
         if df is None or df.empty:
             return f"No balance sheet data found for symbol '{raw_ticker}'"
@@ -516,7 +537,8 @@ def get_cashflow(
         ticker = _normalize_for_financial_api(ticker)
 
     try:
-        df = ak.stock_cash_flow_sheet_by_report_em(symbol=ticker)
+        with _bypass_proxy():
+            df = ak.stock_cash_flow_sheet_by_report_em(symbol=ticker)
 
         if df is None or df.empty:
             return f"No cash flow data found for symbol '{raw_ticker}'"
@@ -552,7 +574,8 @@ def get_income_statement(
         ticker = _normalize_for_financial_api(ticker)
 
     try:
-        df = ak.stock_profit_sheet_by_report_em(symbol=ticker)
+        with _bypass_proxy():
+            df = ak.stock_profit_sheet_by_report_em(symbol=ticker)
 
         if df is None or df.empty:
             return f"No income statement data found for symbol '{raw_ticker}'"
@@ -589,7 +612,8 @@ def get_news(
         ticker = normalize_a_stock_ticker(ticker)
 
     try:
-        df = ak.stock_news_em(symbol=ticker)
+        with _bypass_proxy():
+            df = ak.stock_news_em(symbol=ticker)
 
         if df.empty:
             return f"No news found for symbol '{raw_ticker}'"
@@ -644,7 +668,8 @@ def get_global_news(
     """
     try:
         # Get major financial news
-        df = ak.stock_news_em(symbol="000001")  # Use a major index stock for macro news
+        with _bypass_proxy():
+            df = ak.stock_news_em(symbol="000001")  # Use a major index stock for macro news
 
         if df.empty:
             return "No global news found"
@@ -700,7 +725,8 @@ def get_insider_transactions(
 
     try:
         # Try East Money source for insider trades
-        df = ak.stock_inner_trade_xq(symbol=ticker)
+        with _bypass_proxy():
+            df = ak.stock_inner_trade_xq(symbol=ticker)
 
         if df is None or df.empty:
             return f"No insider transactions data found for symbol '{raw_ticker}'"
