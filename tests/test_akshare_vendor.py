@@ -53,3 +53,26 @@ class TestNormalizeAStockTicker:
 
     def test_whitespace(self):
         assert normalize_a_stock_ticker("  600519  ") == "600519"
+
+
+class TestGetStockData:
+    """Test OHLCV data fetching."""
+
+    def test_basic_fetch(self):
+        """Test fetching stock data for a known A-share."""
+        from tradingagents.dataflows.akshare_utils import get_stock_data
+        result = get_stock_data("600519", "2025-01-01", "2025-01-10")
+        assert "Stock data for 600519" in result
+        assert "Date,Open,Close,High,Low" in result or "日期,开盘,收盘" in result
+
+    def test_with_prefix(self):
+        """Test fetching with sh/sz prefix."""
+        from tradingagents.dataflows.akshare_utils import get_stock_data
+        result = get_stock_data("sh600519", "2025-01-01", "2025-01-10")
+        assert "600519" in result
+
+    def test_invalid_ticker(self):
+        """Test error handling for invalid ticker."""
+        from tradingagents.dataflows.akshare_utils import get_stock_data, AKShareError
+        with pytest.raises(AKShareError):
+            get_stock_data("999999", "2025-01-01", "2025-01-10")
