@@ -98,3 +98,32 @@ class TestGetIndicators:
         from tradingagents.dataflows.akshare_utils import get_indicators
         with pytest.raises(ValueError, match="not supported"):
             get_indicators("600519", "invalid_indicator", "2025-01-10", 5)
+
+
+class TestGetFundamentals:
+    """Test fundamentals data fetching."""
+
+    def test_basic_fundamentals(self):
+        """Test fetching fundamentals for a known A-share."""
+        from tradingagents.dataflows.akshare_utils import get_fundamentals
+        result = get_fundamentals("600519")
+        assert "Company Fundamentals" in result
+        assert "600519" in result
+
+    def test_balance_sheet(self):
+        """Test fetching balance sheet."""
+        from tradingagents.dataflows.akshare_utils import get_balance_sheet
+        result = get_balance_sheet("600519")
+        assert "Balance Sheet" in result
+
+    def test_cashflow(self):
+        """Test fetching cash flow."""
+        from tradingagents.dataflows.akshare_utils import get_cashflow
+        result = get_cashflow("600519")
+        assert "Cash Flow" in result
+
+    def test_income_statement(self):
+        """Test fetching income statement."""
+        from tradingagents.dataflows.akshare_utils import get_income_statement
+        result = get_income_statement("600519")
+        assert "Income Statement" in result

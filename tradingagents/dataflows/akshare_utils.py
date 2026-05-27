@@ -341,3 +341,234 @@ def get_indicators(
     )
 
     return result_str
+
+
+def _normalize_for_financial_api(ticker: str) -> str:
+    """Convert A-share ticker to SH/SZ prefix format for financial report APIs.
+
+    Examples:
+    - 600519 -> SH600519
+    - 000001 -> SZ000001
+    - 300750 -> SZ300750
+    - 600519.SH -> SH600519
+    - sh600519 -> SH600519
+    """
+    ticker = ticker.strip()
+    # Remove .SH/.SZ suffix
+    if '.' in ticker:
+        suffix = ticker.split('.')[1].upper()
+        code = ticker.split('.')[0]
+        return suffix + code
+    # Remove sh/sz prefix and re-add uppercase
+    if ticker.lower().startswith(('sh', 'sz')):
+        return ticker[:2].upper() + ticker[2:]
+    # Pure 6-digit: infer exchange from code
+    if re.match(r'^\d{6}$', ticker):
+        if ticker.startswith(('6', '9')):
+            return 'SH' + ticker
+        else:
+            return 'SZ' + ticker
+    return ticker
+
+
+def get_fundamentals(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    curr_date: Annotated[str, "current date (not used for AKShare)"] = None
+) -> str:
+    """Get company fundamentals overview from AKShare.
+
+    Returns formatted text with key metrics.
+    Uses stock_profile_cninfo (cninfo.com.cn) as primary source,
+    with stock_individual_info_em (East Money) as fallback.
+    """
+    raw_ticker = ticker
+    if is_a_stock_ticker(ticker):
+        ticker = normalize_a_stock_ticker(ticker)
+
+    try:
+        # Try cninfo profile first (more reliable)
+        df = ak.stock_profile_cninfo(symbol=ticker)
+
+        if df is not None and not df.empty:
+            info = df.iloc[0].to_dict()
+
+            fields = [
+                ("Name", info.get("公司名称")),
+                ("English Name", info.get("英文名称")),
+                ("A-Share Code", info.get("A股代码")),
+                ("A-Share Short Name", info.get("A股简称")),
+                ("Market", info.get("所属市场")),
+                ("Industry", info.get("所属行业")),
+                ("Legal Representative", info.get("法人代表")),
+                ("Registered Capital", info.get("注册资金")),
+                ("List Date", info.get("上市日期")),
+                ("Founded Date", info.get("成立日期")),
+                ("Website", info.get("官方网站")),
+                ("Main Business", info.get("主营业务")),
+            ]
+
+            lines = []
+            for label, value in fields:
+                if value is not None and str(value).strip() and str(value) != "None":
+                    # Truncate very long text fields
+                    val_str = str(value).strip()
+                    if len(val_str) > 200:
+                        val_str = val_str[:200] + "..."
+                    lines.append(f"{label}: {val_str}")
+
+            header = f"# Company Fundamentals for {raw_ticker}\n"
+            header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+            return header + "\n".join(lines)
+
+    except Exception:
+        pass  # Fall through to East Money API
+
+    try:
+        # Fallback: East Money individual info
+        df = ak.stock_individual_info_em(symbol=ticker)
+
+        if df is None or df.empty:
+            return f"No fundamentals data found for symbol '{raw_ticker}'"
+
+        # Convert to key-value pairs
+        info = dict(zip(df["item"], df["value"]))
+
+        fields = [
+            ("Name", info.get("股票简称")),
+            ("Code", info.get("股票代码")),
+            ("Industry", info.get("行业")),
+            ("Market Cap", info.get("总市值")),
+            ("Circulating Market Cap", info.get("流通市值")),
+            ("Total Shares", info.get("总股本")),
+            ("Circulating Shares", info.get("流通股")),
+            ("PE Ratio", info.get("市盈率(动态)")),
+            ("PB Ratio", info.get("市净率")),
+            ("ROE", info.get("净资产收益率")),
+            ("Revenue", info.get("营业收入")),
+            ("Net Profit", info.get("净利润")),
+            ("Gross Margin", info.get("毛利率")),
+            ("Net Margin", info.get("净利率")),
+            ("List Date", info.get("上市时间")),
+        ]
+
+        lines = []
+        for label, value in fields:
+            if value is not None and str(value).strip():
+                lines.append(f"{label}: {value}")
+
+        header = f"# Company Fundamentals for {raw_ticker}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+        return header + "\n".join(lines)
+
+    except Exception as e:
+        return f"Error retrieving fundamentals for {raw_ticker}: {str(e)}"
+
+
+def get_balance_sheet(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
+    curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None
+) -> str:
+    """Get balance sheet data from AKShare.
+
+    Returns CSV string.
+    """
+    raw_ticker = ticker
+    if is_a_stock_ticker(ticker):
+        ticker = _normalize_for_financial_api(ticker)
+
+    try:
+        df = ak.stock_balance_sheet_by_report_em(symbol=ticker)
+
+        if df is None or df.empty:
+            return f"No balance sheet data found for symbol '{raw_ticker}'"
+
+        # Filter by curr_date if provided
+        if curr_date and "REPORT_DATE_NAME" in df.columns:
+            cutoff = pd.Timestamp(curr_date)
+            df["REPORT_DATE_NAME"] = pd.to_datetime(df["REPORT_DATE_NAME"], errors="coerce")
+            df = df[df["REPORT_DATE_NAME"] <= cutoff]
+
+        csv_string = df.to_csv(index=False)
+
+        header = f"# Balance Sheet data for {raw_ticker}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+        return header + csv_string
+
+    except Exception as e:
+        return f"Error retrieving balance sheet for {raw_ticker}: {str(e)}"
+
+
+def get_cashflow(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
+    curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None
+) -> str:
+    """Get cash flow data from AKShare.
+
+    Returns CSV string.
+    """
+    raw_ticker = ticker
+    if is_a_stock_ticker(ticker):
+        ticker = _normalize_for_financial_api(ticker)
+
+    try:
+        df = ak.stock_cash_flow_sheet_by_report_em(symbol=ticker)
+
+        if df is None or df.empty:
+            return f"No cash flow data found for symbol '{raw_ticker}'"
+
+        # Filter by curr_date if provided
+        if curr_date and "REPORT_DATE_NAME" in df.columns:
+            cutoff = pd.Timestamp(curr_date)
+            df["REPORT_DATE_NAME"] = pd.to_datetime(df["REPORT_DATE_NAME"], errors="coerce")
+            df = df[df["REPORT_DATE_NAME"] <= cutoff]
+
+        csv_string = df.to_csv(index=False)
+
+        header = f"# Cash Flow data for {raw_ticker}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+        return header + csv_string
+
+    except Exception as e:
+        return f"Error retrieving cash flow for {raw_ticker}: {str(e)}"
+
+
+def get_income_statement(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
+    curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None
+) -> str:
+    """Get income statement data from AKShare.
+
+    Returns CSV string.
+    """
+    raw_ticker = ticker
+    if is_a_stock_ticker(ticker):
+        ticker = _normalize_for_financial_api(ticker)
+
+    try:
+        df = ak.stock_profit_sheet_by_report_em(symbol=ticker)
+
+        if df is None or df.empty:
+            return f"No income statement data found for symbol '{raw_ticker}'"
+
+        # Filter by curr_date if provided
+        if curr_date and "REPORT_DATE_NAME" in df.columns:
+            cutoff = pd.Timestamp(curr_date)
+            df["REPORT_DATE_NAME"] = pd.to_datetime(df["REPORT_DATE_NAME"], errors="coerce")
+            df = df[df["REPORT_DATE_NAME"] <= cutoff]
+
+        csv_string = df.to_csv(index=False)
+
+        header = f"# Income Statement data for {raw_ticker}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+        return header + csv_string
+
+    except Exception as e:
+        return f"Error retrieving income statement for {raw_ticker}: {str(e)}"
