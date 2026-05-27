@@ -158,6 +158,7 @@ _PROVIDER_BASE_URL = {
     "minimax-cn": "https://api.minimaxi.com/v1",
     "openrouter": "https://openrouter.ai/api/v1",
     "ollama":     "http://localhost:11434/v1",
+    "mimo":       "https://token-plan-cn.xiaomimimo.com/v1",
 }
 
 

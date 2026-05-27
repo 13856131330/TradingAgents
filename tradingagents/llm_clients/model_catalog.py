@@ -161,6 +161,16 @@ MODEL_OPTIONS: ProviderModeOptions = {
     # cli.utils.confirm_ollama_endpoint() right after provider selection.
     # "Custom model ID" lets users pick any model they have pulled via
     # `ollama pull` beyond the three suggested defaults.
+    "mimo": {
+        "quick": [
+            ("MiMo-v2.5-Pro - Xiaomi reasoning model", "mimo-v2.5-pro"),
+            ("Custom model ID", "custom"),
+        ],
+        "deep": [
+            ("MiMo-v2.5-Pro - Xiaomi reasoning model", "mimo-v2.5-pro"),
+            ("Custom model ID", "custom"),
+        ],
+    },
     "ollama": {
         "quick": [
             ("Qwen3:latest (8B)", "qwen3:latest"),
