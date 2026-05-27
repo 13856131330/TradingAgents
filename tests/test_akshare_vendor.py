@@ -127,3 +127,26 @@ class TestGetFundamentals:
         from tradingagents.dataflows.akshare_utils import get_income_statement
         result = get_income_statement("600519")
         assert "Income Statement" in result
+
+
+class TestGetNews:
+    """Test news data fetching."""
+
+    def test_stock_news(self):
+        """Test fetching stock-specific news."""
+        from tradingagents.dataflows.akshare_utils import get_news
+        result = get_news("600519")
+        # News may or may not be available, but should not raise
+        assert isinstance(result, str)
+
+    def test_global_news(self):
+        """Test fetching global news."""
+        from tradingagents.dataflows.akshare_utils import get_global_news
+        result = get_global_news()
+        assert isinstance(result, str)
+
+    def test_insider_transactions(self):
+        """Test fetching insider transactions."""
+        from tradingagents.dataflows.akshare_utils import get_insider_transactions
+        result = get_insider_transactions("600519")
+        assert isinstance(result, str)

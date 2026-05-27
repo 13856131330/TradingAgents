@@ -572,3 +572,146 @@ def get_income_statement(
 
     except Exception as e:
         return f"Error retrieving income statement for {raw_ticker}: {str(e)}"
+
+
+def get_news(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    start_date: Annotated[str, "Start date in yyyy-mm-dd format"] = None,
+    end_date: Annotated[str, "End date in yyyy-mm-dd format"] = None,
+    max_articles: Annotated[int, "maximum number of articles to return"] = 20,
+) -> str:
+    """Get stock-specific news from AKShare (East Money source).
+
+    Returns formatted markdown string.
+    """
+    raw_ticker = ticker
+    if is_a_stock_ticker(ticker):
+        ticker = normalize_a_stock_ticker(ticker)
+
+    try:
+        df = ak.stock_news_em(symbol=ticker)
+
+        if df.empty:
+            return f"No news found for symbol '{raw_ticker}'"
+
+        # Filter by date range if provided
+        if "发布时间" in df.columns:
+            df["发布时间"] = pd.to_datetime(df["发布时间"], errors="coerce")
+            if start_date:
+                start_dt = pd.Timestamp(start_date)
+                df = df[df["发布时间"] >= start_dt]
+            if end_date:
+                end_dt = pd.Timestamp(end_date)
+                df = df[df["发布时间"] <= end_dt]
+
+        # Limit number of articles
+        df = df.head(max_articles)
+
+        # Format as markdown
+        lines = [f"# News for {raw_ticker}", ""]
+        for _, row in df.iterrows():
+            title = row.get("新闻标题", row.get("标题", ""))
+            content = row.get("新闻内容", row.get("内容", ""))
+            pub_time = row.get("发布时间", "")
+            source = row.get("文章来源", row.get("来源", ""))
+
+            lines.append(f"## {title}")
+            if pub_time:
+                lines.append(f"**Published:** {pub_time}")
+            if source:
+                lines.append(f"**Source:** {source}")
+            if content:
+                # Truncate long content
+                if len(str(content)) > 500:
+                    content = str(content)[:500] + "..."
+                lines.append(f"\n{content}")
+            lines.append("\n---\n")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Error retrieving news for {raw_ticker}: {str(e)}"
+
+
+def get_global_news(
+    start_date: Annotated[str, "Start date in yyyy-mm-dd format"] = None,
+    end_date: Annotated[str, "End date in yyyy-mm-dd format"] = None,
+    max_articles: Annotated[int, "maximum number of articles to return"] = 10,
+) -> str:
+    """Get global/macro news from AKShare.
+
+    Returns formatted markdown string.
+    """
+    try:
+        # Get major financial news
+        df = ak.stock_news_em(symbol="000001")  # Use a major index stock for macro news
+
+        if df.empty:
+            return "No global news found"
+
+        # Filter by date range if provided
+        if "发布时间" in df.columns:
+            df["发布时间"] = pd.to_datetime(df["发布时间"], errors="coerce")
+            if start_date:
+                start_dt = pd.Timestamp(start_date)
+                df = df[df["发布时间"] >= start_dt]
+            if end_date:
+                end_dt = pd.Timestamp(end_date)
+                df = df[df["发布时间"] <= end_dt]
+
+        # Limit number of articles
+        df = df.head(max_articles)
+
+        # Format as markdown
+        lines = ["# Global Financial News", ""]
+        for _, row in df.iterrows():
+            title = row.get("新闻标题", row.get("标题", ""))
+            content = row.get("新闻内容", row.get("内容", ""))
+            pub_time = row.get("发布时间", "")
+            source = row.get("文章来源", row.get("来源", ""))
+
+            lines.append(f"## {title}")
+            if pub_time:
+                lines.append(f"**Published:** {pub_time}")
+            if source:
+                lines.append(f"**Source:** {source}")
+            if content:
+                if len(str(content)) > 500:
+                    content = str(content)[:500] + "..."
+                lines.append(f"\n{content}")
+            lines.append("\n---\n")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Error retrieving global news: {str(e)}"
+
+
+def get_insider_transactions(
+    ticker: Annotated[str, "ticker symbol of the company"]
+) -> str:
+    """Get insider transactions data from AKShare.
+
+    Returns CSV string.
+    """
+    raw_ticker = ticker
+    if is_a_stock_ticker(ticker):
+        ticker = normalize_a_stock_ticker(ticker)
+
+    try:
+        # Try East Money source for insider trades
+        df = ak.stock_inner_trade_xq(symbol=ticker)
+
+        if df is None or df.empty:
+            return f"No insider transactions data found for symbol '{raw_ticker}'"
+
+        csv_string = df.to_csv(index=False)
+
+        header = f"# Insider Transactions data for {raw_ticker}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+        return header + csv_string
+
+    except Exception as e:
+        # Insider transactions may not be available for all stocks
+        return f"No insider transactions data found for symbol '{raw_ticker}': {str(e)}"
